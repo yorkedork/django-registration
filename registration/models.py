@@ -34,9 +34,9 @@ class RegistrationManager(models.Manager):
     def activate_user(self, activation_key):
         """
         Validate an activation key and activate the corresponding
-        ``User`` if valid.
+        ``UserModel`` if valid.
 
-        If the key is valid and has not expired, return the ``User``
+        If the key is valid and has not expired, return the ``UserModel``
         after activating.
 
         If the key is not valid or has expired, return ``False``.
@@ -85,9 +85,9 @@ class RegistrationManager(models.Manager):
     def create_inactive_user(self, site, new_user=None, send_email=True,
                              request=None, **user_info):
         """
-        Create a new, inactive ``User``, generate a
+        Create a new, inactive ``UserModel``, generate a
         ``RegistrationProfile`` and email its activation key to the
-        ``User``, returning the new ``User``.
+        ``UserModel``, returning the new ``UserModel``.
 
         By default, an activation email will be sent to the new
         user. To disable this, pass ``send_email=False``.
@@ -109,36 +109,62 @@ class RegistrationManager(models.Manager):
 
         return new_user
 
-    def create_profile(self, user):
+    def generate_profile_activation_key(self, user):
         """
-        Create a ``RegistrationProfile`` for a given
-        ``User``, and return the ``RegistrationProfile``.
-
-        The activation key for the ``RegistrationProfile`` will be a
-        SHA1 hash, generated from a combination of the ``User``'s
-        pk and a random salt.
-
+        TBD
         """
-        salt = hashlib.sha1(six.text_type(random.random())
-                            .encode('ascii')).hexdigest()[:5]
+        salt = hashlib.sha1(six.text_type(random.random()).encode('ascii')).hexdigest()[:5]
         salt = salt.encode('ascii')
         user_pk = str(user.pk)
         if isinstance(user_pk, six.text_type):
             user_pk = user_pk.encode('utf-8')
-        activation_key = hashlib.sha1(salt+user_pk).hexdigest()
-        return self.create(user=user,
-                           activation_key=activation_key)
+        return hashlib.sha1(salt+user_pk).hexdigest()
+
+    def create_profile(self, user):
+        """
+        Create a ``RegistrationProfile`` for a given
+        ``UserModel``, and return the ``RegistrationProfile``.
+
+        The activation key for the ``RegistrationProfile`` will be a
+        SHA1 hash, generated from a combination of the ``UserModel``'s
+        pk and a random salt.
+
+        """
+        activation_key = self.generate_profile_activation_key(user)
+        return self.create(user=user, activation_key=activation_key)
+
+    def reactivate_profile(self, user):
+        """
+        TBD
+        """
+        activation_key = self.generate_profile_activation_key(user)
+        (profile, created) = self.get_or_create(
+            user=user, defaults={'activation_key': activation_key})
+
+        if not created:
+            # update the attribute 'UserModel.date_joined' to prevent
+            # the method 'activation_key_expired' from failing
+            user.date_joined = datetime_now()
+            user.save()
+            # if the profile had already been activated using
+            # the initial activation key, store the newly-generated
+            # key on the profile.
+            if profile.activation_key == self.model.ACTIVATED:
+                profile.activation_key = activation_key
+                profile.save()
+
+        return profile
 
     def delete_expired_users(self):
         """
         Remove expired instances of ``RegistrationProfile`` and their
-        associated ``User``s.
+        associated ``UserModel``s.
 
         Accounts to be deleted are identified by searching for
         instances of ``RegistrationProfile`` with expired activation
-        keys, and then checking to see if their associated ``User``
+        keys, and then checking to see if their associated ``UserModel``
         instances have the field ``is_active`` set to ``False``; any
-        ``User`` who is both inactive and has an expired activation
+        ``UserModel`` who is both inactive and has an expired activation
         key will be deleted.
 
         It is recommended that this method be executed regularly as
@@ -162,9 +188,9 @@ class RegistrationManager(models.Manager):
            those accounts will be deleted, the usernames will become
            available for use again.
 
-        If you have a troublesome ``User`` and wish to disable their
+        If you have a troublesome ``UserModel`` and wish to disable their
         account while keeping it in the database, simply delete the
-        associated ``RegistrationProfile``; an inactive ``User`` which
+        associated ``RegistrationProfile``; an inactive ``UserModel`` which
         does not have an associated ``RegistrationProfile`` will not
         be deleted.
 
